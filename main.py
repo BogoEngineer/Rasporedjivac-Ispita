@@ -9,10 +9,10 @@ def main():
     """sale_file = input("Unesite ime .json fajla sa salama: ")
     rok_file = input("Unesite ime .json fajla sa rokom: ")"""
 
-    with open("javni_testovi\sale3.json", encoding="utf8", errors='ignore') as f:
+    with open("javni_testovi\sale2.json", encoding="utf8", errors='ignore') as f:
         sale_json = json.load(f)
 
-    with open("javni_testovi" + '\\' "rok3.json", encoding="utf8", errors='ignore') as f:
+    with open("javni_testovi" + '\\' "rok2.json", encoding="utf8", errors='ignore') as f:
         rok_json = json.load(f)
 
     sale = [Sala(x['naziv'], x['kapacitet'], x['racunari'], x['dezurni'], x['etf'], i) for x in sale_json for i in
@@ -23,10 +23,10 @@ def main():
     stanje = pocetnoStanje(rok, sale)
 
     for i in range(4):
-        stanje.backtrack(0, i)
+        stanje.backtrack(i)
 
     #print(Stanje.rezultat)
-    print("MIN POENI", Stanje.min_poeni)
+    print("MIN POENI", Stanje.min_poeni, Stanje.id)
 
     with open('raspored.csv', 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.writer(csvfile, delimiter=' ',
@@ -47,7 +47,7 @@ def main():
 def pocetnoStanje(rok, sale):
     Stanje.ispiti = [x for x in rok.ispiti]
 
-    prosecan_kapacitet = 30 # utvrdjeno na osnovu javnih testova
+    prosecan_kapacitet = 25 # utvrdjeno na osnovu javnih testova
     loss_function = lambda x: -((x.dezurni*x.kapacitet)/prosecan_kapacitet + (1.2 if not x.etf else 0))
     pocetni_domen = []
     for ispit in rok.ispiti:

@@ -8,6 +8,7 @@ mapaTermina = {
     3: "18:30"
 }
 
+
 class Sala:
     def __init__(self, naziv, kapacitet, racunari, dezurni, etf, termin):
         self.naziv = naziv
@@ -48,6 +49,12 @@ class Ispit:
         self.prijavljeni = prijavljeni
         self.racunari = (racunari == 1)
         self.odseci = odseci
+        self.godina = -1
+        self.dan = 0
+        for c in sifra[-2::-1]:
+            if str(c).isdigit():
+                self.godina = int(c)
+                break
 
     def __str__(self):
         return "sifra: " + self.sifra + \
@@ -72,22 +79,27 @@ class ElementDomena:
         return str(self)
 
     def __str__(self):
-        return "Sifra_predmeta: "+self.sifra_predmeta+\
-               " Dodeljeno: "+str(self.dodeljeno)+\
-               " Sale: "+str(self.sale)
+        return "Sifra_predmeta: " + self.sifra_predmeta + \
+               " Dodeljeno: " + str(self.dodeljeno) + \
+               " Sale: " + str(self.sale)
+
 
 class Stanje:
-    rezultat = None
+    id = 0
+    rezultat = None  # rezultati se nizu po danima
     min_poeni = sys.maxsize * 2 + 1  # max_int
+    min_id = -1
     ispiti = []
 
     def __init__(self, domen):
         self.domen = domen
+        self.id = Stanje.id
+        Stanje.id += 1
 
     def __str__(self):
-        return "Domen: "+str(self.domen)
+        return "Domen: " + str(self.domen)
 
-    def backtrack(self, trenutni_poeni, termin):
+    def backtrack(self, termin):
         sledeca_promenljiva = min([x for x in self.domen if not x.dodeljeno], key=lambda d: len(d.sale))
         if len(sledeca_promenljiva.sale) == 0: return
         sledeci_ispit = next((x for x in Stanje.ispiti if x.sifra == sledeca_promenljiva.sifra_predmeta), None)
@@ -105,23 +117,35 @@ class Stanje:
 
         sledeca_promenljiva.dodeljeno = True
         sledeca_promenljiva.sale = temp_sale
-        for alocirana_sala in sledeca_promenljiva.sale:
-            trenutni_poeni += alocirana_sala.dezurni + (1.2 if alocirana_sala.etf == 0 else 0)
+
+        trenutni_poeni = self.izracunajLoss()
+        if trenutni_poeni >= Stanje.min_poeni: return # optimizacija
 
         self.forward_check(temp_sale)
 
-        if trenutni_poeni >= Stanje.min_poeni: return
+        # if trenutni_poeni >= Stanje.min_poeni: return
 
         if len([x for x in self.domen if not x.dodeljeno]) == 0:
-            Stanje.min_poeni = trenutni_poeni if trenutni_poeni < Stanje.min_poeni else Stanje.min_poeni
-            Stanje.rezultat = self.domen
+            potencijalni_poeni = self.izracunajLoss()
+            Stanje.rezultat = self.domen if potencijalni_poeni < Stanje.min_poeni else Stanje.rezultat
+            Stanje.min_poeni = potencijalni_poeni if potencijalni_poeni < Stanje.min_poeni else Stanje.min_poeni
+            # Stanje.id = self.id
             return
 
         for i in range(4):
-            Stanje(copy.deepcopy(self.domen)).backtrack(trenutni_poeni, i)
+            Stanje(copy.deepcopy(self.domen)).backtrack(i)
 
     def forward_check(self, uzete_sale):
         for elem in self.domen:
             if elem.dodeljeno: continue
             for sala in uzete_sale:
                 if sala in elem.sale: elem.sale.remove(sala)
+
+    def izracunajLoss(self):
+        ret = 0
+        for elem in self.domen:
+            if not elem.dodeljeno: continue
+            for sala in elem.sale:
+                ret += sala.dezurni + (1.2 if not sala.etf else 0)
+
+        return ret
