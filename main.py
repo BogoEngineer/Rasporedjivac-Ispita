@@ -9,10 +9,10 @@ def main():
     """sale_file = input("Unesite ime .json fajla sa salama: ")
     rok_file = input("Unesite ime .json fajla sa rokom: ")"""
 
-    with open("javni_testovi\sale2.json", encoding="utf8", errors='ignore') as f:
+    with open("javni_testovi\sale4.json", encoding="utf8", errors='ignore') as f:
         sale_json = json.load(f)
 
-    with open("javni_testovi" + '\\' "rok2.json", encoding="utf8", errors='ignore') as f:
+    with open("javni_testovi" + '\\' "rok4.json", encoding="utf8", errors='ignore') as f:
         rok_json = json.load(f)
 
     sale = [Sala(x['naziv'], x['kapacitet'], x['racunari'], x['dezurni'], x['etf'], i) for x in sale_json for i in
@@ -22,26 +22,58 @@ def main():
 
     stanje = pocetnoStanje(rok, sale)
 
-    for i in range(4):
-        stanje.backtrack(i)
+    rezultati_po_danima = []
 
+    dan = 0
+    while True:
+        print("DAN: ", dan+1)
+        print(stanje.domen)
+        for i in range(4):
+            stanje.backtrack(i, dan)
+
+        rezultati_po_danima.append(Stanje.rezultat)
+        if Stanje.finished: break
+
+        rezultat = None
+        min_poeni = sys.maxsize * 2 + 1  # max_int
+
+        zavrseni_do_sad = []
+        for elemDomena in stanje.domen:
+            if elemDomena.dodeljeno:
+                zavrseni_do_sad.append(elemDomena.sifra_predmeta)
+
+        vadi_iz_roka = []
+        for ispit in rok.ispiti:
+            if ispit.sifra in zavrseni_do_sad:
+                vadi_iz_roka.append(ispit)
+
+        for ispit in vadi_iz_roka:
+            rok.ispiti.remove(ispit)
+
+        stanje = pocetnoStanje(rok, sale)
+        dan += 1
+        for elemDomena in stanje.domen:
+            elemDomena.dan = dan
+
+    print("REZULTATI:", rezultati_po_danima)
     #print(Stanje.rezultat)
     print("MIN POENI", Stanje.min_poeni, Stanje.id)
 
     with open('raspored.csv', 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.writer(csvfile, delimiter=' ',
                             quotechar='|', quoting=csv.QUOTE_MINIMAL)
-        writer.writerow(['Dan1'] + ['sala' + sala.naziv for sala in sale if sala.termin == 0])
-        for i in range(4):
-            novi_red = []
-            for _, sala in enumerate(sale):
-                if sala.termin != i: continue
-                to_append = [x for x in Stanje.rezultat if sala in x.sale]
-                # print("SALA: ", sala.naziv + " " + mapaTermina[sala.termin])
-                # print("TO APPEND: ", to_append)
-                to_append = to_append[0].sifra_predmeta if len(to_append) == 1 else 'X'
-                novi_red.append(to_append)
-            writer.writerow(['T' + str(i + 1)] + novi_red)
+        for d in range(dan+1):
+            writer.writerow(['Dan' + str(d+1)] + ['sala' + sala.naziv for sala in sale if sala.termin == 0])
+            for i in range(4):
+                novi_red = []
+                for _, sala in enumerate(sale):
+                    if sala.termin != i: continue
+                    to_append = [x for x in rezultati_po_danima[d] if sala in x.sale]
+                    # print("SALA: ", sala.naziv + " " + mapaTermina[sala.termin])
+                    # print("TO APPEND: ", to_append)
+                    to_append = to_append[0].sifra_predmeta if len(to_append) == 1 else 'X'
+                    novi_red.append(to_append)
+                writer.writerow(['T' + str(i + 1)] + novi_red)
 
 
 def pocetnoStanje(rok, sale):
@@ -56,7 +88,13 @@ def pocetnoStanje(rok, sale):
         # print("SRTD: ", srtd)
         pocetni_domen.append(ElementDomena(ispit.sifra, srtd))
 
-    return Stanje(pocetni_domen)
+        broj_preostalih_mesta = [0 for i in range(4)]  # broj preostalih mesta u terminu
+        for i in range(4):
+            for sala in sale:
+                if sala.termin != i: continue
+                broj_preostalih_mesta[i] += sala.kapacitet
+
+    return Stanje(pocetni_domen, broj_preostalih_mesta)
 
 
 if __name__ == "__main__":

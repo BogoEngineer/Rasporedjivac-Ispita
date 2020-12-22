@@ -50,7 +50,6 @@ class Ispit:
         self.racunari = (racunari == 1)
         self.odseci = odseci
         self.godina = -1
-        self.dan = 0
         for c in sifra[-2::-1]:
             if str(c).isdigit():
                 self.godina = int(c)
@@ -74,6 +73,7 @@ class ElementDomena:
         self.sifra_predmeta = sifra_predmeta
         self.dodeljeno = False
         self.sale = sale  # predstavlja sale koje su u opticaju ako je dodeljeno == False, u suprotnom odabrane sale
+        self.dan = 0
 
     def __repr__(self):
         return str(self)
@@ -81,26 +81,30 @@ class ElementDomena:
     def __str__(self):
         return "Sifra_predmeta: " + self.sifra_predmeta + \
                " Dodeljeno: " + str(self.dodeljeno) + \
-               " Sale: " + str(self.sale)
+               " Sale: " + str(self.sale)+\
+               " Dan: " + str(self.dan)
 
 
 class Stanje:
     id = 0
-    rezultat = None  # rezultati se nizu po danima
+    rezultat = None  # rezultat za jedan dan
     min_poeni = sys.maxsize * 2 + 1  # max_int
     min_id = -1
+    finished = False
     ispiti = []
 
-    def __init__(self, domen):
+    def __init__(self, domen, preostala_mesta):
         self.domen = domen
         self.id = Stanje.id
         Stanje.id += 1
+        self.broj_preostalih_mesta = preostala_mesta
 
     def __str__(self):
         return "Domen: " + str(self.domen)
 
-    def backtrack(self, termin):
-        sledeca_promenljiva = min([x for x in self.domen if not x.dodeljeno], key=lambda d: len(d.sale))
+    def backtrack(self, termin, dan):
+        sledeca_promenljiva = min([x for x in self.domen if not x.dodeljeno],
+                                  key=lambda d: len(d.sale))
         if len(sledeca_promenljiva.sale) == 0: return
         sledeci_ispit = next((x for x in Stanje.ispiti if x.sifra == sledeca_promenljiva.sifra_predmeta), None)
         smesteni_stuednti = 0
@@ -115,17 +119,24 @@ class Stanje:
             smesteni_stuednti += sledeca_sala.kapacitet
             temp_sale.append(sledeca_sala)
 
+        self.broj_preostalih_mesta[termin] -= smesteni_stuednti
         sledeca_promenljiva.dodeljeno = True
         sledeca_promenljiva.sale = temp_sale
 
         trenutni_poeni = self.izracunajLoss()
-        if trenutni_poeni >= Stanje.min_poeni: return # optimizacija
+        if trenutni_poeni >= Stanje.min_poeni: return  # optimizacija
 
         self.forward_check(temp_sale)
 
         # if trenutni_poeni >= Stanje.min_poeni: return
 
-        if len([x for x in self.domen if not x.dodeljeno]) == 0:
+        nedodeljeni = [x.sifra_predmeta for x in self.domen if not x.dodeljeno]
+        nedodeljeni_ispiti = [x for x in Stanje.ispiti if x.sifra in nedodeljeni]
+        #print("NEDODELJENI: ", nedodeljeni)
+        if len(nedodeljeni) == 0 or max(self.broj_preostalih_mesta) < \
+                min(nedodeljeni_ispiti, key=lambda i: i.prijavljeni).prijavljeni: # ako vise nema preostalih ispita
+            # ili ima preostalih ispita ali nema mesta za njih u ovom danu
+            if len(nedodeljeni) == 0: Stanje.finished = True # svim ispitima je dodeljen termin
             potencijalni_poeni = self.izracunajLoss()
             Stanje.rezultat = self.domen if potencijalni_poeni < Stanje.min_poeni else Stanje.rezultat
             Stanje.min_poeni = potencijalni_poeni if potencijalni_poeni < Stanje.min_poeni else Stanje.min_poeni
@@ -133,7 +144,7 @@ class Stanje:
             return
 
         for i in range(4):
-            Stanje(copy.deepcopy(self.domen)).backtrack(i)
+            Stanje(copy.deepcopy(self.domen), copy.copy(self.broj_preostalih_mesta)).backtrack(i, dan)
 
     def forward_check(self, uzete_sale):
         for elem in self.domen:
