@@ -81,8 +81,8 @@ class ElementDomena:
     def __str__(self):
         return "Sifra_predmeta: " + self.sifra_predmeta + \
                " Dodeljeno: " + str(self.dodeljeno) + \
-               " Sale: " + str(self.sale)+\
-               " Dan: " + str(self.dan)
+               " Dan: " + str(self.dan) + \
+               " Sale: " + str(self.sale)
 
 
 class Stanje:
@@ -103,9 +103,36 @@ class Stanje:
         return "Domen: " + str(self.domen)
 
     def backtrack(self, termin, dan):
-        sledeca_promenljiva = min([x for x in self.domen if not x.dodeljeno],
+        nedodeljeni = [x for x in self.domen if not x.dodeljeno]
+        ima_mesta = []
+
+        if len(nedodeljeni) > 0:  # ako nije zavrseno sa dodelom sala za sve ispite
+            for elemDomena in nedodeljeni:
+                ispit = self.nadjiIspitPoSifri(elemDomena.sifra_predmeta)
+                potrebno = ispit.prijavljeni
+                for sala in elemDomena.sale:
+                    if sala.termin != termin: continue
+                    potrebno -= sala.kapacitet
+
+                if potrebno <= 0: ima_mesta.append(elemDomena)
+
+            if len(ima_mesta) == 0:
+                potencijalni_poeni = self.izracunajLoss()
+                Stanje.rezultat = self.domen if potencijalni_poeni < Stanje.min_poeni else Stanje.rezultat
+                Stanje.min_poeni = potencijalni_poeni if potencijalni_poeni < Stanje.min_poeni else Stanje.min_poeni
+                return
+        else:  # ako je zavrseno sa dodelom sala za sve ispite
+            Stanje.finished = True  # svim ispitima je dodeljen termin
+            potencijalni_poeni = self.izracunajLoss()
+            Stanje.rezultat = self.domen if potencijalni_poeni < Stanje.min_poeni else Stanje.rezultat
+            Stanje.min_poeni = potencijalni_poeni if potencijalni_poeni < Stanje.min_poeni else Stanje.min_poeni
+            # Stanje.id = self.id
+            return
+
+        sledeca_promenljiva = min(ima_mesta,
                                   key=lambda d: len(d.sale))
-        if len(sledeca_promenljiva.sale) == 0: return
+        # sledeci ispit se bira na osnovu toga koliko sala u opticaju ima (zaobilazenje nepotrebnih konflikata)
+        # ali za koju ima mesta
         sledeci_ispit = next((x for x in Stanje.ispiti if x.sifra == sledeca_promenljiva.sifra_predmeta), None)
         smesteni_stuednti = 0
         temp_sale = []
@@ -114,12 +141,12 @@ class Stanje:
             sledeca_sala = next((sala for sala in sledeca_promenljiva.sale if sala.termin == termin), None)  # sale su
             # sortirane prema broju dezurnih i
             # tome da li su na etfu ili ne, respektivno
-            if sledeca_sala is None: return
             sledeca_promenljiva.sale.remove(sledeca_sala)
             smesteni_stuednti += sledeca_sala.kapacitet
             temp_sale.append(sledeca_sala)
 
         self.broj_preostalih_mesta[termin] -= smesteni_stuednti
+        #print(self.broj_preostalih_mesta)
         sledeca_promenljiva.dodeljeno = True
         sledeca_promenljiva.sale = temp_sale
 
@@ -127,21 +154,6 @@ class Stanje:
         if trenutni_poeni >= Stanje.min_poeni: return  # optimizacija
 
         self.forward_check(temp_sale)
-
-        # if trenutni_poeni >= Stanje.min_poeni: return
-
-        nedodeljeni = [x.sifra_predmeta for x in self.domen if not x.dodeljeno]
-        nedodeljeni_ispiti = [x for x in Stanje.ispiti if x.sifra in nedodeljeni]
-        #print("NEDODELJENI: ", nedodeljeni)
-        if len(nedodeljeni) == 0 or max(self.broj_preostalih_mesta) < \
-                min(nedodeljeni_ispiti, key=lambda i: i.prijavljeni).prijavljeni: # ako vise nema preostalih ispita
-            # ili ima preostalih ispita ali nema mesta za njih u ovom danu
-            if len(nedodeljeni) == 0: Stanje.finished = True # svim ispitima je dodeljen termin
-            potencijalni_poeni = self.izracunajLoss()
-            Stanje.rezultat = self.domen if potencijalni_poeni < Stanje.min_poeni else Stanje.rezultat
-            Stanje.min_poeni = potencijalni_poeni if potencijalni_poeni < Stanje.min_poeni else Stanje.min_poeni
-            # Stanje.id = self.id
-            return
 
         for i in range(4):
             Stanje(copy.deepcopy(self.domen), copy.copy(self.broj_preostalih_mesta)).backtrack(i, dan)
@@ -160,3 +172,6 @@ class Stanje:
                 ret += sala.dezurni + (1.2 if not sala.etf else 0)
 
         return ret
+
+    def nadjiIspitPoSifri(self, sifra):
+        return [x for x in Stanje.ispiti if x.sifra == sifra][0]
