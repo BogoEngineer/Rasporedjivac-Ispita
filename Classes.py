@@ -93,20 +93,20 @@ class Stanje:
     finished = False
     ispiti = []
 
-    def __init__(self, domen, preostala_mesta):
+    def __init__(self, domen):
         self.domen = domen
         self.id = Stanje.id
         Stanje.id += 1
-        self.broj_preostalih_mesta = preostala_mesta
+        #self.broj_preostalih_mesta = preostala_mesta
 
     def __str__(self):
         return "Domen: " + str(self.domen)
 
     def backtrack(self, termin, dan):
+        #print("SAVADE"+ str(termin))
         nedodeljeni = [x for x in self.domen if not x.dodeljeno]
-        ima_mesta = []
-
         if len(nedodeljeni) > 0:  # ako nije zavrseno sa dodelom sala za sve ispite
+            ima_mesta = []  # AKO NEMA MESTA U OVOM TERMINU ZAOVI BACKTRACK ZA SLEDECE PA VIDI TU, NE ODUSTAJ ODMAH!!!
             for elemDomena in nedodeljeni:
                 ispit = self.nadjiIspitPoSifri(elemDomena.sifra_predmeta)
                 potrebno = ispit.prijavljeni
@@ -115,12 +115,50 @@ class Stanje:
                     potrebno -= sala.kapacitet
 
                 if potrebno <= 0: ima_mesta.append(elemDomena)
-
-            if len(ima_mesta) == 0:
+            if len(ima_mesta) == 0: # ako nema mesta vise u ovom terminu za bilo koji od nedodeljenih isppita
+                if termin != 3: # probaj da nadjes mesta za ispit u narednom terminu
+                    Stanje(copy.deepcopy(self.domen)).backtrack(termin+1, dan)
                 potencijalni_poeni = self.izracunajLoss()
-                Stanje.rezultat = self.domen if potencijalni_poeni < Stanje.min_poeni else Stanje.rezultat
-                Stanje.min_poeni = potencijalni_poeni if potencijalni_poeni < Stanje.min_poeni else Stanje.min_poeni
+                if Stanje.rezultat is None:
+                    Stanje.rezultat = self.domen
+                    Stanje.min_poeni = potencijalni_poeni
+                else:
+                    if len([x for x in self.domen if x.dodeljeno]) > len([x for x in Stanje.rezultat if x.dodeljeno]):
+                        Stanje.rezultat = self.domen
+                        Stanje.min_poeni = potencijalni_poeni
+                    elif len([x for x in self.domen if x.dodeljeno]) == len([x for x in Stanje.rezultat if x.dodeljeno]):
+                        Stanje.rezultat = self.domen if potencijalni_poeni < Stanje.min_poeni else Stanje.rezultat
+                        Stanje.min_poeni = potencijalni_poeni if potencijalni_poeni < Stanje.min_poeni else Stanje.min_poeni
+
                 return
+            else: # ima mesta u ovom terminu za dodeljivanje mesta ispitima
+                sledeca_promenljiva = min(ima_mesta,
+                                          key=lambda d: len(d.sale))
+                # sledeci ispit se bira na osnovu toga koliko sala u opticaju ima (zaobilazenje nepotrebnih konflikata)
+                # ali za koju ima mesta
+                sledeci_ispit = next((x for x in Stanje.ispiti if x.sifra == sledeca_promenljiva.sifra_predmeta), None)
+                smesteni_stuednti = 0
+                temp_sale = []
+                while smesteni_stuednti < sledeci_ispit.prijavljeni:
+                    if len(sledeca_promenljiva.sale) == 0: return
+                    sledeca_sala = next((sala for sala in sledeca_promenljiva.sale if sala.termin == termin),
+                                        None)  # sale su
+                    # sortirane prema broju dezurnih i
+                    # tome da li su na etfu ili ne, respektivno
+                    sledeca_promenljiva.sale.remove(sledeca_sala)
+                    smesteni_stuednti += sledeca_sala.kapacitet
+                    temp_sale.append(sledeca_sala)
+
+                sledeca_promenljiva.dodeljeno = True
+                sledeca_promenljiva.sale = temp_sale
+
+                trenutni_poeni = self.izracunajLoss()
+                if trenutni_poeni >= Stanje.min_poeni: return  # optimizacija
+
+                self.forward_check(temp_sale)
+
+
+                Stanje(copy.deepcopy(self.domen)).backtrack(termin, dan)
         else:  # ako je zavrseno sa dodelom sala za sve ispite
             Stanje.finished = True  # svim ispitima je dodeljen termin
             potencijalni_poeni = self.izracunajLoss()
@@ -128,35 +166,6 @@ class Stanje:
             Stanje.min_poeni = potencijalni_poeni if potencijalni_poeni < Stanje.min_poeni else Stanje.min_poeni
             # Stanje.id = self.id
             return
-
-        sledeca_promenljiva = min(ima_mesta,
-                                  key=lambda d: len(d.sale))
-        # sledeci ispit se bira na osnovu toga koliko sala u opticaju ima (zaobilazenje nepotrebnih konflikata)
-        # ali za koju ima mesta
-        sledeci_ispit = next((x for x in Stanje.ispiti if x.sifra == sledeca_promenljiva.sifra_predmeta), None)
-        smesteni_stuednti = 0
-        temp_sale = []
-        while smesteni_stuednti < sledeci_ispit.prijavljeni:
-            if len(sledeca_promenljiva.sale) == 0: return
-            sledeca_sala = next((sala for sala in sledeca_promenljiva.sale if sala.termin == termin), None)  # sale su
-            # sortirane prema broju dezurnih i
-            # tome da li su na etfu ili ne, respektivno
-            sledeca_promenljiva.sale.remove(sledeca_sala)
-            smesteni_stuednti += sledeca_sala.kapacitet
-            temp_sale.append(sledeca_sala)
-
-        self.broj_preostalih_mesta[termin] -= smesteni_stuednti
-        #print(self.broj_preostalih_mesta)
-        sledeca_promenljiva.dodeljeno = True
-        sledeca_promenljiva.sale = temp_sale
-
-        trenutni_poeni = self.izracunajLoss()
-        if trenutni_poeni >= Stanje.min_poeni: return  # optimizacija
-
-        self.forward_check(temp_sale)
-
-        for i in range(4):
-            Stanje(copy.deepcopy(self.domen), copy.copy(self.broj_preostalih_mesta)).backtrack(i, dan)
 
     def forward_check(self, uzete_sale):
         for elem in self.domen:

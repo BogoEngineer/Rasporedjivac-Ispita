@@ -27,7 +27,7 @@ def main():
 
     dan = 0
     while True:
-        #print("DAN"+str(dan+1) + " PROSLEDJENO: ", len(stanje.domen))
+        print("DAN"+str(dan+1) + " PROSLEDJENO: ", len(stanje.domen))
         for i in range(4):
             stanje.backtrack(i, dan)
 
@@ -96,13 +96,13 @@ def pocetnoStanje(rok, sale):
         # print("SRTD: ", srtd)
         pocetni_domen.append(ElementDomena(ispit.sifra, srtd))
 
-    broj_preostalih_mesta = [0 for i in range(4)]  # broj preostalih mesta u terminu
-    for i in range(4):
+    #broj_preostalih_mesta = [0 for i in range(4)]  # broj preostalih mesta u terminu
+    """for i in range(4):
         for sala in sale:
             if sala.termin != i: continue
-            broj_preostalih_mesta[i] += sala.kapacitet
+            broj_preostalih_mesta[i] += sala.kapacitet"""
 
-    return Stanje(pocetni_domen, broj_preostalih_mesta)
+    return Stanje(pocetni_domen)
 
 
 if __name__ == "__main__":
