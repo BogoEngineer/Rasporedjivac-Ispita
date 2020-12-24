@@ -74,6 +74,8 @@ class ElementDomena:
         self.dodeljeno = False
         self.sale = sale  # predstavlja sale koje su u opticaju ako je dodeljeno == False, u suprotnom odabrane sale
         self.dan = 0
+        self.valid = True  # da li sme ispit da se odrzi danas (u slucaju da je stavljen vec u raspored neki drugi ispit
+        # koji je ista godina na istom smeru)
 
     def __repr__(self):
         return str(self)
@@ -84,6 +86,8 @@ class ElementDomena:
                " Dan: " + str(self.dan) + \
                " Sale: " + str(self.sale)
 
+    def __eq__(self, other):
+        return self.sifra_predmeta == other.sifra_predmeta
 
 class Stanje:
     id = 0
@@ -97,14 +101,14 @@ class Stanje:
         self.domen = domen
         self.id = Stanje.id
         Stanje.id += 1
-        #self.broj_preostalih_mesta = preostala_mesta
+        # self.broj_preostalih_mesta = preostala_mesta
 
     def __str__(self):
         return "Domen: " + str(self.domen)
 
     def backtrack(self, termin, dan):
-        #print("SAVADE"+ str(termin))
-        nedodeljeni = [x for x in self.domen if not x.dodeljeno]
+        # print("SAVADE"+ str(termin))
+        nedodeljeni = [x for x in self.domen if not x.dodeljeno and x.valid] # nedodeljeni a validni za ovaj dan
         if len(nedodeljeni) > 0:  # ako nije zavrseno sa dodelom sala za sve ispite
             ima_mesta = []  # AKO NEMA MESTA U OVOM TERMINU ZAOVI BACKTRACK ZA SLEDECE PA VIDI TU, NE ODUSTAJ ODMAH!!!
             for elemDomena in nedodeljeni:
@@ -115,9 +119,9 @@ class Stanje:
                     potrebno -= sala.kapacitet
 
                 if potrebno <= 0: ima_mesta.append(elemDomena)
-            if len(ima_mesta) == 0: # ako nema mesta vise u ovom terminu za bilo koji od nedodeljenih isppita
-                if termin != 3: # probaj da nadjes mesta za ispit u narednom terminu
-                    Stanje(copy.deepcopy(self.domen)).backtrack(termin+1, dan)
+            if len(ima_mesta) == 0:  # ako nema mesta vise u ovom terminu za bilo koji od nedodeljenih isppita
+                if termin != 3:  # probaj da nadjes mesta za ispit u narednom terminu
+                    Stanje(copy.deepcopy(self.domen)).backtrack(termin + 1, dan)
                 potencijalni_poeni = self.izracunajLoss()
                 if Stanje.rezultat is None:
                     Stanje.rezultat = self.domen
@@ -126,12 +130,13 @@ class Stanje:
                     if len([x for x in self.domen if x.dodeljeno]) > len([x for x in Stanje.rezultat if x.dodeljeno]):
                         Stanje.rezultat = self.domen
                         Stanje.min_poeni = potencijalni_poeni
-                    elif len([x for x in self.domen if x.dodeljeno]) == len([x for x in Stanje.rezultat if x.dodeljeno]):
+                    elif len([x for x in self.domen if x.dodeljeno]) == len(
+                            [x for x in Stanje.rezultat if x.dodeljeno]):
                         Stanje.rezultat = self.domen if potencijalni_poeni < Stanje.min_poeni else Stanje.rezultat
                         Stanje.min_poeni = potencijalni_poeni if potencijalni_poeni < Stanje.min_poeni else Stanje.min_poeni
 
                 return
-            else: # ima mesta u ovom terminu za dodeljivanje mesta ispitima
+            else:  # ima mesta u ovom terminu za dodeljivanje mesta ispitima
                 sledeca_promenljiva = min(ima_mesta,
                                           key=lambda d: len(d.sale))
                 # sledeci ispit se bira na osnovu toga koliko sala u opticaju ima (zaobilazenje nepotrebnih konflikata)
@@ -155,23 +160,51 @@ class Stanje:
                 trenutni_poeni = self.izracunajLoss()
                 if trenutni_poeni >= Stanje.min_poeni: return  # optimizacija
 
-                self.forward_check(temp_sale)
-
+                self.forward_check(temp_sale, sledeca_promenljiva)
 
                 Stanje(copy.deepcopy(self.domen)).backtrack(termin, dan)
         else:  # ako je zavrseno sa dodelom sala za sve ispite
-            Stanje.finished = True  # svim ispitima je dodeljen termin
+            if len([x for x in self.domen if not x.dodeljeno and not x.valid]) == 0:
+                Stanje.finished = True  # svim ispitima je dodeljen termin i nema termina preostalih za naredne dane
             potencijalni_poeni = self.izracunajLoss()
             Stanje.rezultat = self.domen if potencijalni_poeni < Stanje.min_poeni else Stanje.rezultat
             Stanje.min_poeni = potencijalni_poeni if potencijalni_poeni < Stanje.min_poeni else Stanje.min_poeni
             # Stanje.id = self.id
             return
 
-    def forward_check(self, uzete_sale):
+    def forward_check(self, uzete_sale, postavljen_ispit):
+        ispit_objekat = self.nadjiIspitPoSifri(postavljen_ispit.sifra_predmeta)
         for elem in self.domen:
             if elem.dodeljeno: continue
             for sala in uzete_sale:
                 if sala in elem.sale: elem.sale.remove(sala)
+
+        # forward checking za istu godinu i smer
+        mapa_smerova = {}
+        for elem in self.domen:
+            if elem == postavljen_ispit: continue
+            ispit = self.nadjiIspitPoSifri(elem.sifra_predmeta)
+            for odsek in ispit.odseci:
+                if odsek not in mapa_smerova:
+                    mapa_smerova[odsek] = [elem]
+                else:
+                    mapa_smerova[odsek].append(elem)
+
+        for odsek in self.nadjiIspitPoSifri(postavljen_ispit.sifra_predmeta).odseci:
+            if odsek in mapa_smerova:
+                for elem in mapa_smerova[odsek]:
+                    trenutni_ispit = self.nadjiIspitPoSifri(elem.sifra_predmeta)
+                    # uslov za ispite istih godina i smerova u jednom danu
+                    if trenutni_ispit.godina == ispit_objekat.godina:
+                        elem.valid = False
+                    # uslov za ispite susednih godina i istih smerova u istom terminu
+                    elif abs(trenutni_ispit.godina - ispit_objekat.godina) == 1:
+                        temp_remove = []
+                        for sala in elem.sale:
+                            if sala.termin == postavljen_ispit.sale[0].termin: temp_remove.append(sala)
+
+                        for to_remove in temp_remove:
+                            elem.sale.remove(to_remove)
 
     def izracunajLoss(self):
         ret = 0

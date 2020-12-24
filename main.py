@@ -56,6 +56,7 @@ def main():
         for elemDomena in stanje.domen:
             # print(elemDomena.sifra_predmeta, dan)
             elemDomena.dan = dan
+            elemDomena.valid = True # ponovo su validni za ovaj dan dok se ne dokaze suprotno
 
     #for i,rpd in enumerate(rezultati_po_danima):
     #    print("ZA DAN "+str(i+1))
@@ -87,16 +88,15 @@ def pocetnoStanje(rok, sale):
     Stanje.min_poeni = sys.maxsize * 2 + 1  # max_int
     Stanje.ispiti = [x for x in rok.ispiti]
 
-    prosecan_kapacitet = 25 # utvrdjeno na osnovu javnih testova
-    loss_function = lambda x: -((x.dezurni*x.kapacitet)/prosecan_kapacitet + (1.2 if not x.etf else 0))
+    prosecan_kapacitet = sum([sala.kapacitet for sala in sale if sala.termin == 0])\
+                         //len([sala.kapacitet for sala in sale if sala.termin == 0])
+    loss_function = lambda x: (x.dezurni*prosecan_kapacitet)/x.kapacitet + (1.2 if not x.etf else 0)
     pocetni_domen = []
     for ispit in rok.ispiti:
         srtd = sorted([sala for sala in sale if ispit.racunari == sala.racunari],
                       key=loss_function) # sortiraj prema najmanjem skoru
-        # print("SRTD: ", srtd)
         pocetni_domen.append(ElementDomena(ispit.sifra, srtd))
 
-    #broj_preostalih_mesta = [0 for i in range(4)]  # broj preostalih mesta u terminu
     """for i in range(4):
         for sala in sale:
             if sala.termin != i: continue
